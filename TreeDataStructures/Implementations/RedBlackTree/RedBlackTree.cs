@@ -9,7 +9,7 @@ public class RedBlackTree<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, RbN
     {
         throw new NotImplementedException();
     }
-    
+
     protected override void OnNodeAdded(RbNode<TKey, TValue> newNode)
     {
         throw new NotImplementedException();

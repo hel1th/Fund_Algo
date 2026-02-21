@@ -25,7 +25,7 @@ public class Treap<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, TreapNode<
     {
         throw new NotImplementedException("Implement Merge operation");
     }
-    
+
 
     public override void Add(TKey key, TValue value)
     {
@@ -45,10 +45,10 @@ public class Treap<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, TreapNode<
     {
         throw new NotImplementedException();
     }
-    
+
     protected override void OnNodeRemoved(TreapNode<TKey, TValue>? parent, TreapNode<TKey, TValue>? child)
     {
         throw new NotImplementedException();
     }
-    
+
 }

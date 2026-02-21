@@ -7,11 +7,11 @@ public class AvlTree<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, AvlNode<
 {
     protected override AvlNode<TKey, TValue> CreateNode(TKey key, TValue value)
         => new(key, value);
-    
+
     protected override void OnNodeAdded(AvlNode<TKey, TValue> newNode)
     {
         throw new NotImplementedException();
     }
 
-    
+
 }
