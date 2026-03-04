@@ -169,6 +169,14 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     {
     }
 
+    /// <summary>
+    /// Вызывается после доступа. 
+    /// </summary>
+    /// <param name="node">Узел, к которому получен доступ</param>
+    protected virtual void OnNodeAccessed(TNode node)
+    {
+    }
+
     #endregion
 
     #region Helpers
@@ -183,6 +191,7 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
             int cmp = Comparer.Compare(key, current.Key);
             if (cmp == 0)
             {
+                OnNodeAccessed(current);
                 return current;
             }
 
@@ -370,6 +379,7 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
             _started = false;
         }
 
+
         public void Dispose()
         {
             // TODO release managed resources here
@@ -492,34 +502,33 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
 
             return null;
         }
-
-        private static TNode GoLeft(TNode node)
-        {
-            while (node.Left is not null) node = node.Left;
-            return node;
-        }
-
-        private static TNode GoRight(TNode node)
-        {
-            while (node.Right is not null) node = node.Right;
-            return node;
-        }
-
-        private static TNode GoDeepLeft(TNode node)
-        {
-            while (node.Left is not null || node.Right is not null)
-                node = node.Left ?? node.Right!;
-            return node;
-        }
-
-        private static TNode GoDeepRight(TNode node)
-        {
-            while (node.Right is not null || node.Left is not null)
-                node = node.Right ?? node.Left!;
-            return node;
-        }
     }
 
+    protected static TNode GoLeft(TNode node)
+    {
+        while (node.Left is not null) node = node.Left;
+        return node;
+    }
+
+    protected static TNode GoRight(TNode node)
+    {
+        while (node.Right is not null) node = node.Right;
+        return node;
+    }
+
+    protected static TNode GoDeepLeft(TNode node)
+    {
+        while (node.Left is not null || node.Right is not null)
+            node = node.Left ?? node.Right!;
+        return node;
+    }
+
+    protected static TNode GoDeepRight(TNode node)
+    {
+        while (node.Right is not null || node.Left is not null)
+            node = node.Right ?? node.Left!;
+        return node;
+    }
 
     public void Clear()
     {
