@@ -229,44 +229,42 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
         y.Parent = x;
     }
 
-    protected void RotateBigLeft(TNode x)
-    {
-        var rightChild = x.Right;
-        if (rightChild == null)
-            return;
-
-        RotateRight(rightChild);
-        RotateLeft(x);
-    }
-
+    // LR case
     protected void RotateBigRight(TNode y)
     {
-        var leftChild = y.Left;
-        if (leftChild == null)
-            return;
-
-        RotateLeft(leftChild);
+        if (y.Left is null) return;
+        RotateLeft(y.Left);
         RotateRight(y);
     }
 
-    protected void RotateDoubleLeft(TNode x)
+    // RL case
+    protected void RotateBigLeft(TNode x)
     {
-        var rightChild = x.Right;
-        if (rightChild == null)
-            return;
-
-        RotateLeft(rightChild);
+        if (x.Right is null) return;
+        RotateRight(x.Right);
         RotateLeft(x);
     }
 
-    protected void RotateDoubleRight(TNode y)
+    // LL case
+    protected void RotateDoubleLeft(TNode gparent)
     {
-        var leftChild = y.Left;
-        if (leftChild == null)
+        var parent = gparent.Right;
+        if (parent is null)
             return;
 
-        RotateRight(leftChild);
-        RotateRight(y);
+        RotateLeft(gparent);
+        RotateLeft(parent);
+    }
+
+    // RR case
+    protected void RotateDoubleRight(TNode gparent)
+    {
+        var parent = gparent.Left;
+        if (parent is null)
+            return;
+
+        RotateRight(gparent);
+        RotateRight(parent);
     }
 
     // подвешивает child (v) на место parent (u)
