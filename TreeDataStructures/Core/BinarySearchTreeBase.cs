@@ -326,24 +326,13 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     /// Внутренний класс-итератор. 
     /// Реализует паттерн Iterator вручную, без yield return (ban).
     /// </summary>
-    private struct TreeIterator :
+    private struct TreeIterator(TNode? root, TraversalStrategy strategy) :
         IEnumerable<TreeEntry<TKey, TValue>>,
         IEnumerator<TreeEntry<TKey, TValue>>
     {
-        private readonly TNode? _root;
-        private readonly TraversalStrategy _strategy;
+        private TNode? _current = null;
+        private bool _started = false;
 
-        private TNode? _current;
-        private bool _started;
-
-
-        public TreeIterator(TNode? root, TraversalStrategy strategy)
-        {
-            _root = root;
-            _strategy = strategy;
-            _started = false;
-            _current = null;
-        }
 
         public IEnumerator<TreeEntry<TKey, TValue>> GetEnumerator() => this;
         IEnumerator IEnumerable.GetEnumerator() => this;
@@ -360,12 +349,12 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
         {
             if (!_started)
             {
-                _current = GetFirst(_root, _strategy);
+                _current = GetFirst(root, strategy);
                 _started = true;
             }
             else
             {
-                _current = GetNext(_current, _strategy);
+                _current = GetNext(_current, strategy);
             }
 
             return _current is not null;
@@ -535,6 +524,20 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     }
 
     public bool Contains(KeyValuePair<TKey, TValue> item) => ContainsKey(item.Key);
-    public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex) => throw new NotImplementedException();
+
+    public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+
+        if (arrayIndex < 0 || arrayIndex > array.Length)
+            throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+
+        if (array.Length - arrayIndex < Count)
+            throw new ArgumentException("Destination is too small", nameof(array));
+
+        foreach (var entry in InOrder())
+            array[arrayIndex++] = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
+    }
+
     public bool Remove(KeyValuePair<TKey, TValue> item) => Remove(item.Key);
 }
