@@ -53,13 +53,11 @@ public class Treap<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, TreapNode<
             left.Parent = null;
             return left;
         }
-        else
-        {
-            right.Left = Merge(left, right.Left);
-            right.Left?.Parent = right;
-            right.Parent = null;
-            return right;
-        }
+
+        right.Left = Merge(left, right.Left);
+        right.Left?.Parent = right;
+        right.Parent = null;
+        return right;
     }
 
     public override void Add(TKey key, TValue value)

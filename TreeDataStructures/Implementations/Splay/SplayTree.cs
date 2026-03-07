@@ -1,4 +1,5 @@
 ﻿using TreeDataStructures.Implementations.BST;
+using TreeDataStructures.Core;
 
 namespace TreeDataStructures.Implementations.Splay;
 
@@ -60,7 +61,7 @@ public class SplayTree<TKey, TValue> : BinarySearchTree<TKey, TValue>
         Root = node;
     }
 
-    private (BstNode<TKey, TValue>? Left, BstNode<TKey, TValue>? Right) Split(BstNode<TKey, TValue> node)
+    private static (BstNode<TKey, TValue>? Left, BstNode<TKey, TValue>? Right) Split(BstNode<TKey, TValue> node)
     {
         var left = node.Left;
         var right = node.Right;
@@ -90,5 +91,12 @@ public class SplayTree<TKey, TValue> : BinarySearchTree<TKey, TValue>
         leftMax.Right = right;
         right.Parent = leftMax;
         Root = leftMax;
+    }
+
+    private static BstNode<TKey, TValue> GoRight(BstNode<TKey, TValue> node)
+    {
+        while (node.Right is not null)
+            node = node.Right;
+        return node;
     }
 }
