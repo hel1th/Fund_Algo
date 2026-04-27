@@ -1,5 +1,6 @@
 ﻿using TreeDataStructures.Core;
 using static TreeDataStructures.Implementations.RedBlackTree.RbColor;
+using static TreeDataStructures.Implementations.RedBlackTree.RbColor;
 
 namespace TreeDataStructures.Implementations.RedBlackTree;
 
@@ -7,11 +8,14 @@ public class RedBlackTree<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, RbN
     where TKey : IComparable<TKey>
 {
     protected override RbNode<TKey, TValue> CreateNode(TKey key, TValue value) => new RbNode<TKey, TValue>(key, value);
+    protected override RbNode<TKey, TValue> CreateNode(TKey key, TValue value) => new RbNode<TKey, TValue>(key, value);
 
     protected override void OnNodeAdded(RbNode<TKey, TValue> newNode)
     {
         RbFixInsert(newNode);
+        RbFixInsert(newNode);
     }
+
 
     protected override void OnNodeRemoved(RbNode<TKey, TValue>? parent, RbNode<TKey, TValue>? child)
     {
