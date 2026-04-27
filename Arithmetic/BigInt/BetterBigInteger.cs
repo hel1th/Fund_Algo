@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Numerics;
+using System.Text;
 using Arithmetic.BigInt.Interfaces;
 using Arithmetic.BigInt.MultiplyStrategy;
 
@@ -55,7 +56,7 @@ public sealed class BetterBigInteger : IBigInteger
         const string chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
         var start = 0;
-        var isNeg = true;
+        var isNeg = false;
         if (value[0] == '-')
         {
             start++;
@@ -189,11 +190,63 @@ public sealed class BetterBigInteger : IBigInteger
         return new BetterBigInteger(digits.ToArray(), !a.IsNegative);
     }
 
-    public static BetterBigInteger operator /(BetterBigInteger a, BetterBigInteger b) =>
-        throw new NotImplementedException();
 
-    public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b) =>
-        throw new NotImplementedException();
+    private int BitLength()
+    {
+        var digits = GetDigits();
+        if (digits is [0]) return 0;
+
+        return 32 * digits.Length - BitOperations.LeadingZeroCount(digits[^1]);
+    }
+
+    private static (BetterBigInteger quotient, BetterBigInteger remainder) DivRem(BetterBigInteger a,
+        BetterBigInteger b)
+    {
+        if (b.GetDigits() is [0])
+            throw new DivideByZeroException();
+
+
+        switch (CompareMagnitude(a.GetDigits(), b.GetDigits()))
+        {
+            case -1:
+                return (new BetterBigInteger([0]), a);
+
+            case 0:
+                return (new BetterBigInteger([1], a.IsNegative ^ b.IsNegative), new BetterBigInteger([0]));
+        }
+
+        var remainder = new BetterBigInteger(a.GetDigits().ToArray());
+        var quotient = new BetterBigInteger([0]);
+        var one = new BetterBigInteger([1]);
+
+        var bAbs = new BetterBigInteger(b.GetDigits().ToArray()); // без знака
+        var shift = a.BitLength() - b.BitLength();
+
+        for (int i = shift; i >= 0; i--)
+        {
+            var shifted = bAbs << i;
+
+            if (CompareMagnitude(remainder.GetDigits(), shifted.GetDigits()) < 0)
+                continue;
+
+            remainder = new BetterBigInteger(
+                SubtractMagnitudes(remainder.GetDigits(), shifted.GetDigits())
+            );
+            quotient |= one << i;
+        }
+
+        var remIsNeg = a.IsNegative && quotient.GetDigits() is not [0];
+        var quoIsNeg = a.IsNegative ^ b.IsNegative && quotient.GetDigits() is not [0];
+
+        quotient = new BetterBigInteger(quotient.GetDigits().ToArray(), quoIsNeg);
+        remainder = new BetterBigInteger(remainder.GetDigits().ToArray(), remIsNeg);
+
+        return (quotient, remainder);
+    }
+
+    public static BetterBigInteger operator /(BetterBigInteger a, BetterBigInteger b) => DivRem(a, b).quotient;
+
+    public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b) => DivRem(a, b).remainder;
 
 
     public static BetterBigInteger operator *(BetterBigInteger a, BetterBigInteger b)
@@ -202,21 +255,80 @@ public sealed class BetterBigInteger : IBigInteger
         return multiplier.Multiply(a, b);
     }
 
-    public static BetterBigInteger operator ~(BetterBigInteger a) => throw new NotImplementedException();
+    private static uint[] ToTwosComplement(BetterBigInteger a, int length)
+    {
+        uint[] result = new uint[length];
+        a.GetDigits().CopyTo(result.AsSpan());
+
+        if (!a.IsNegative) return result;
+
+        ulong carry = 1;
+        for (var i = 0; i < length; i++)
+        {
+            ulong sum = (~result[i]) + carry;
+            result[i] = (uint)sum;
+            carry = sum >> 32;
+        }
+
+        return result;
+    }
+
+    private static BetterBigInteger FromTwosComplement(uint[] data)
+    {
+        // mask 100000...0 & last limb
+        bool isNegative = (data[^1] & 0x80000000u) != 0;
+
+        if (!isNegative)
+            return new BetterBigInteger(data);
+
+        int length = data.Length;
+        var result = new uint[length];
+
+        ulong borrow = 1;
+        for (int i = 0; i < length; i++)
+        {
+            ulong diff = data[i] - borrow;
+
+            result[i] = ~(uint)diff;
+
+            // 1 if data[i] < borrow, else 0
+            borrow = diff >> 63;
+        }
+
+        return new BetterBigInteger(result, true);
+    }
+
+    private static BetterBigInteger BitwiseOp(
+        BetterBigInteger a, BetterBigInteger b, Func<uint, uint, uint> op)
+    {
+        int len = Math.Max(a.GetDigits().Length, b.GetDigits().Length) + 1;
+        var aTwoCompl = ToTwosComplement(a, len);
+        var bTwoCompl = ToTwosComplement(b, len);
+
+        var result = new uint[len];
+
+        for (int i = 0; i < len; i++)
+            result[i] = op(aTwoCompl[i], bTwoCompl[i]);
+
+        return FromTwosComplement(result);
+    }
+
+    public static BetterBigInteger operator ~(BetterBigInteger a) => -(a + new BetterBigInteger([1]));
 
     public static BetterBigInteger operator &(BetterBigInteger a, BetterBigInteger b) =>
-        throw new NotImplementedException();
+        BitwiseOp(a, b, (x, y) => x & y);
 
     public static BetterBigInteger operator |(BetterBigInteger a, BetterBigInteger b) =>
-        throw new NotImplementedException();
+        BitwiseOp(a, b, (x, y) => x | y);
 
     public static BetterBigInteger operator ^(BetterBigInteger a, BetterBigInteger b) =>
-        throw new NotImplementedException();
+        BitwiseOp(a, b, (x, y) => x ^ y);
 
     public static BetterBigInteger operator <<(BetterBigInteger a, int shift)
     {
         if (shift < 0) return a >> -shift;
         if (shift == 0) return new BetterBigInteger(a.GetDigits().ToArray(), a.IsNegative);
+
 
         var digits = a.GetDigits();
         int limbShift = shift / 32;
@@ -239,6 +351,14 @@ public sealed class BetterBigInteger : IBigInteger
     {
         if (shift < 0) return a << -shift;
         if (shift == 0) return new BetterBigInteger(a.GetDigits().ToArray(), a.IsNegative);
+
+        if (a.IsNegative)
+        {
+            // арифметический сдвиг -((-a - 1) >> shift) - 1
+            var abs = -a;
+            var shifted = (abs - new BetterBigInteger([1])) >> shift;
+            return -(shifted + new BetterBigInteger([1]));
+        }
 
         var digits = a.GetDigits();
         int limbShift = shift / 32;
