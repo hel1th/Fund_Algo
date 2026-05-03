@@ -124,40 +124,46 @@ public sealed class BetterBigInteger : IBigInteger
     private static uint[] AddMagnitudes(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
     {
         var result = new uint[Math.Max(a.Length, b.Length) + 1];
-        ulong carry = 0;
+        uint carry = 0;
 
         for (var i = 0; i < result.Length - 1; i++)
         {
-            ulong aVal = i < a.Length ? a[i] : 0UL;
-            ulong bVal = i < b.Length ? b[i] : 0UL;
+            var aVal = i < a.Length ? a[i] : 0u;
+            var bVal = i < b.Length ? b[i] : 0u;
 
-            var currSum = aVal + bVal + carry;
+            var s0 = aVal + bVal;
+            var c0 = s0 < aVal ? 1u : 0u;
 
-            result[i] = (uint)currSum;
-            carry = currSum >> 32;
+            var s1 = s0 + carry;
+            var c1 = s1 < s0 ? 1u : 0u;
+
+            result[i] = s1;
+            carry = c0 + c1;
         }
 
-        result[^1] = (uint)carry;
+        result[^1] = carry;
         return result;
     }
 
 
-    // a >= b is guaranteed by calling code
     private static uint[] SubtractMagnitudes(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
     {
         var result = new uint[a.Length];
-        long borrow = 0;
+        uint borrow = 0;
 
         for (var i = 0; i < a.Length; i++)
         {
-            long aVal = a[i];
-            var bVal = i < b.Length ? b[i] : 0L;
+            var aVal = a[i];
+            var bVal = i < b.Length ? b[i] : 0u;
 
-            var diff = aVal - bVal - borrow;
+            var s0 = aVal - bVal;
+            var c0 = s0 > aVal ? 1u : 0u;
 
+            var s1 = s0 - borrow;
+            var c1 = s1 > s0 ? 1u : 0u;
 
-            result[i] = (uint)diff;
-            borrow = diff < 0 ? 1L : 0L;
+            result[i] = s1;
+            borrow = c0 + c1;
         }
 
         return result;
@@ -185,7 +191,7 @@ public sealed class BetterBigInteger : IBigInteger
     {
         var digits = a.GetDigits();
         if (digits.Length == 1 && digits[0] == 0)
-            return new BetterBigInteger(Array.Empty<uint>());
+            return new BetterBigInteger([]);
 
         return new BetterBigInteger(digits.ToArray(), !a.IsNegative);
     }
@@ -257,17 +263,18 @@ public sealed class BetterBigInteger : IBigInteger
 
     private static uint[] ToTwosComplement(BetterBigInteger a, int length)
     {
-        uint[] result = new uint[length];
+        var result = new uint[length];
         a.GetDigits().CopyTo(result.AsSpan());
 
         if (!a.IsNegative) return result;
 
-        ulong carry = 1;
+        uint carry = 1;
         for (var i = 0; i < length; i++)
         {
-            ulong sum = (~result[i]) + carry;
-            result[i] = (uint)sum;
-            carry = sum >> 32;
+            var flipped = ~result[i];
+            var sum = flipped + carry;
+            carry = sum < flipped ? 1u : 0u;
+            result[i] = sum;
         }
 
         return result;
@@ -276,23 +283,21 @@ public sealed class BetterBigInteger : IBigInteger
     private static BetterBigInteger FromTwosComplement(uint[] data)
     {
         // mask 100000...0 & last limb
-        bool isNegative = (data[^1] & 0x80000000u) != 0;
+        var isNegative = (data[^1] & 0x80000000u) != 0;
 
         if (!isNegative)
             return new BetterBigInteger(data);
 
-        int length = data.Length;
+        var length = data.Length;
         var result = new uint[length];
 
-        ulong borrow = 1;
-        for (int i = 0; i < length; i++)
+        uint borrow = 1;
+        for (var i = 0; i < length; i++)
         {
-            ulong diff = data[i] - borrow;
-
-            result[i] = ~(uint)diff;
-
-            // 1 if data[i] < borrow, else 0
-            borrow = diff >> 63;
+            var d = data[i];
+            var diff = d - borrow;
+            borrow = diff > d ? 1u : 0u;
+            result[i] = ~diff;
         }
 
         return new BetterBigInteger(result, true);
@@ -424,24 +429,25 @@ public sealed class BetterBigInteger : IBigInteger
     private static uint[] DivideByUInt(ReadOnlySpan<uint> digitsSpan, uint divisor, out uint remainder)
     {
         var res = new uint[digitsSpan.Length];
-        ulong rem = 0;
+        uint rem = 0;
 
         for (int i = digitsSpan.Length - 1; i >= 0; i--)
         {
-            // guaranteed no overflow
-            // vot prufi
-            // cur = rem * 2^32 + dig
-            // cur < rem * 2^32 + 2^32
-            // dig < 2^32, rem < div by def
-            // cur < 2^32 * (rem+1) [rem + 1 <= div]
-            // cur / div < 2^32 * ((rem+1) / div)-> <= 1
-            // cur / div < 2^32
-            ulong cur = (rem << 32) | digitsSpan[i];
-            res[i] = (uint)(cur / divisor);
-            rem = cur % divisor;
+            var lo = digitsSpan[i] & 0xFFFF;
+            var hi = digitsSpan[i] >> 16;
+
+            // rem < divisor <= 36, rem * 2^16 не переполняет uint
+            var hiVal = (rem << 16) | hi;
+            var q1 = hiVal / divisor;
+            var r1 = hiVal % divisor;
+
+            var loVal = (r1 << 16) | lo;
+            var q0 = loVal / divisor;
+            rem = loVal % divisor;
+            res[i] = (q1 << 16) | q0;
         }
 
-        remainder = (uint)rem;
+        remainder = rem;
         return res;
     }
 }
