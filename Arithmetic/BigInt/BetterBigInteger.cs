@@ -38,9 +38,7 @@ public sealed class BetterBigInteger : IBigInteger
         Array.Copy(digits, _data, normLen);
     }
 
-    public BetterBigInteger(IEnumerable<uint> digits, bool isNegative = false) : this(digits.ToArray(), isNegative)
-    {
-    }
+    public BetterBigInteger(IEnumerable<uint> digits, bool isNegative = false) : this(digits.ToArray(), isNegative)  {}
 
     // BetterBigInteger("10011", 2)
     // BetterBigInteger("64616", 10)
@@ -91,22 +89,8 @@ public sealed class BetterBigInteger : IBigInteger
         if (IsNegative != other.IsNegative)
             return IsNegative ? -1 : 1;
 
-        var cmp = CompareMagnitude(GetDigits(), other.GetDigits());
+        var cmp = MagnitudeHelper.Compare(GetDigits(), other.GetDigits());
         return IsNegative ? -cmp : cmp;
-    }
-
-    private static int CompareMagnitude(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
-    {
-        if (a.Length != b.Length)
-            return a.Length > b.Length ? 1 : -1;
-
-        for (var i = a.Length - 1; i >= 0; i--)
-        {
-            if (a[i] != b[i])
-                return a[i] > b[i] ? 1 : -1;
-        }
-
-        return 0;
     }
 
     public bool Equals(IBigInteger? other) => CompareTo(other) == 0;
@@ -121,53 +105,6 @@ public sealed class BetterBigInteger : IBigInteger
         return hash.ToHashCode();
     }
 
-    private static uint[] AddMagnitudes(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
-    {
-        var result = new uint[Math.Max(a.Length, b.Length) + 1];
-        uint carry = 0;
-
-        for (var i = 0; i < result.Length - 1; i++)
-        {
-            var aVal = i < a.Length ? a[i] : 0u;
-            var bVal = i < b.Length ? b[i] : 0u;
-
-            var s0 = aVal + bVal;
-            var c0 = s0 < aVal ? 1u : 0u;
-
-            var s1 = s0 + carry;
-            var c1 = s1 < s0 ? 1u : 0u;
-
-            result[i] = s1;
-            carry = c0 + c1;
-        }
-
-        result[^1] = carry;
-        return result;
-    }
-
-
-    private static uint[] SubtractMagnitudes(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
-    {
-        var result = new uint[a.Length];
-        uint borrow = 0;
-
-        for (var i = 0; i < a.Length; i++)
-        {
-            var aVal = a[i];
-            var bVal = i < b.Length ? b[i] : 0u;
-
-            var s0 = aVal - bVal;
-            var c0 = s0 > aVal ? 1u : 0u;
-
-            var s1 = s0 - borrow;
-            var c1 = s1 > s0 ? 1u : 0u;
-
-            result[i] = s1;
-            borrow = c0 + c1;
-        }
-
-        return result;
-    }
 
     public static BetterBigInteger operator +(BetterBigInteger a, BetterBigInteger b)
     {
@@ -175,12 +112,12 @@ public sealed class BetterBigInteger : IBigInteger
         var bDigs = b.GetDigits();
 
         if (a.IsNegative == b.IsNegative)
-            return new BetterBigInteger(AddMagnitudes(aDigs, bDigs), a.IsNegative);
+            return new BetterBigInteger(MagnitudeHelper.Add(aDigs, bDigs), a.IsNegative);
 
-        return CompareMagnitude(aDigs, bDigs) switch
+        return MagnitudeHelper.Compare(aDigs, bDigs) switch
         {
-            1 => new BetterBigInteger(SubtractMagnitudes(aDigs, bDigs), a.IsNegative),
-            -1 => new BetterBigInteger(SubtractMagnitudes(bDigs, aDigs), b.IsNegative),
+            1 => new BetterBigInteger(MagnitudeHelper.Subtract(aDigs, bDigs), a.IsNegative),
+            -1 => new BetterBigInteger(MagnitudeHelper.Subtract(bDigs, aDigs), b.IsNegative),
             _ => new BetterBigInteger([0])
         };
     }
@@ -212,7 +149,7 @@ public sealed class BetterBigInteger : IBigInteger
             throw new DivideByZeroException();
 
 
-        switch (CompareMagnitude(a.GetDigits(), b.GetDigits()))
+        switch (MagnitudeHelper.Compare(a.GetDigits(), b.GetDigits()))
         {
             case -1:
                 return (new BetterBigInteger([0]), a);
@@ -232,11 +169,11 @@ public sealed class BetterBigInteger : IBigInteger
         {
             var shifted = bAbs << i;
 
-            if (CompareMagnitude(remainder.GetDigits(), shifted.GetDigits()) < 0)
+            if (MagnitudeHelper.Compare(remainder.GetDigits(), shifted.GetDigits()) < 0)
                 continue;
 
             remainder = new BetterBigInteger(
-                SubtractMagnitudes(remainder.GetDigits(), shifted.GetDigits())
+                MagnitudeHelper.Subtract(remainder.GetDigits(), shifted.GetDigits())
             );
             quotient |= one << i;
         }
@@ -257,8 +194,27 @@ public sealed class BetterBigInteger : IBigInteger
 
     public static BetterBigInteger operator *(BetterBigInteger a, BetterBigInteger b)
     {
-        var multiplier = new SimpleMultiplier();
-        return multiplier.Multiply(a, b);
+        const int karatsubaThreshold = 128;
+
+        var lenA = a.GetDigits().Length; 
+        var lenB = b.GetDigits().Length; 
+
+        IMultiplier multiplier;
+
+        var isNeg = a.IsNegative ^ b.IsNegative;
+
+        if (lenA < karatsubaThreshold || lenB < karatsubaThreshold)
+            multiplier = new SimpleMultiplier();
+        
+        else
+            multiplier = new KaratsubaMultiplier(karatsubaThreshold);
+        
+
+        var result = multiplier.Multiply(a, b);
+
+        var normalized = new BetterBigInteger(result.GetDigits().ToArray(), isNeg);
+
+        return normalized;
     }
 
     private static uint[] ToTwosComplement(BetterBigInteger a, int length)
@@ -449,5 +405,89 @@ public sealed class BetterBigInteger : IBigInteger
 
         remainder = rem;
         return res;
+    }
+}
+
+internal static class MagnitudeHelper
+{
+    public static uint[] Add(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
+    {
+        var result = new uint[Math.Max(a.Length, b.Length) + 1];
+        uint carry = 0;
+
+        for (var i = 0; i < result.Length - 1; i++)
+        {
+            var aVal = i < a.Length ? a[i] : 0u;
+            var bVal = i < b.Length ? b[i] : 0u;
+
+            var s0 = aVal + bVal;
+            var c0 = s0 < aVal ? 1u : 0u;
+
+            var s1 = s0 + carry;
+            var c1 = s1 < s0 ? 1u : 0u;
+
+            result[i] = s1;
+            carry = c0 + c1;
+        }
+
+        result[^1] = carry;
+        return Trim(result);
+    }
+
+    // a >= b guaranteed by caller
+    public static uint[] Subtract(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
+    {
+        var result = new uint[a.Length];
+        uint borrow = 0;
+
+        for (var i = 0; i < a.Length; i++)
+        {
+            var aVal = a[i];
+            var bVal = i < b.Length ? b[i] : 0u;
+
+            var s0 = aVal - bVal;
+            var c0 = s0 > aVal ? 1u : 0u;
+
+            var s1 = s0 - borrow;
+            var c1 = s1 > s0 ? 1u : 0u;
+
+            result[i] = s1;
+            borrow = c0 + c1;
+        }
+
+        return Trim(result);
+    } 
+
+    public static int Compare(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
+    {
+        int lenA = a.Length;
+        while (lenA > 1 && a[lenA - 1] == 0) lenA--;
+
+        int lenB = b.Length;
+        while (lenB > 1 && b[lenB - 1] == 0) lenB--;
+
+        if (lenA != lenB)
+            return lenA > lenB ? 1 : -1;
+
+        for (var i = lenA - 1; i >= 0; i--)
+        {
+            if (a[i] != b[i])
+                return a[i] > b[i] ? 1 : -1;
+        }
+
+        return 0;
+    }
+
+    
+    internal static uint[] Trim(uint[] array)
+    {
+    int length = array.Length;
+    while (length > 1 && array[length - 1] == 0) length--;
+    
+    if (length == array.Length) return array;
+    
+    var result = new uint[length];
+    Array.Copy(array, 0, result, 0, length);
+    return result;
     }
 }

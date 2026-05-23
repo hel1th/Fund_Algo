@@ -1,4 +1,5 @@
-﻿using Arithmetic.BigInt.Interfaces;
+﻿using System;
+using Arithmetic.BigInt.Interfaces;
 
 namespace Arithmetic.BigInt.MultiplyStrategy;
 
@@ -10,21 +11,25 @@ internal class SimpleMultiplier : IMultiplier
         var bDigs = b.GetDigits();
         var result = new uint[aDigs.Length + bDigs.Length];
 
-        for (int i = 0; i < aDigs.Length; i++)
+        // Schoolbook O(N^2) multiplication
+        for (var i = 0; i < aDigs.Length; i++)
         {
-            uint carry = 0;
-            
-            for (int j = 0; j < bDigs.Length; j++)
-                carry = MultiplyHalf(aDigs[i], bDigs[j], result[i + j], carry, out result[i + j]);
+            var aVal = aDigs[i];
 
-            int k = i + bDigs.Length;
-            while (carry != 0)
+            // Optimization: Skip loop if the multiplier limb is 0
+            if (aVal == 0) continue;
+
+            uint carry = 0;
+            for (var j = 0; j < bDigs.Length; j++)
             {
-                uint sum = result[k] + carry;
-                carry = sum < result[k] ? 1u : 0u;
-                result[k] = sum;
-                k++;
+                var bVal = bDigs[j];
+
+                // result[i + j] acts as the ongoing accumulator
+                carry = MultiplyHalf(aVal, bVal, result[i + j], carry, out var lo);
+                result[i + j] = lo;
             }
+
+            result[i + bDigs.Length] = carry;
         }
 
         bool isNeg = a.IsNegative ^ b.IsNegative;
@@ -33,31 +38,37 @@ internal class SimpleMultiplier : IMultiplier
 
     private static uint MultiplyHalf(uint a, uint b, uint acc, uint carryIn, out uint lo)
     {
-        var aLo = a & 0xFFFF;
+        var aLo = a & 0xFFFFu;
         var aHi = a >> 16;
-        
-        var bLo = b & 0xFFFF;
+        var bLo = b & 0xFFFFu;
         var bHi = b >> 16;
 
-        var ll = aLo * bLo;
-        var lh = aLo * bHi;
-        var hl = aHi * bLo;
-        var hh = aHi * bHi;
+        var p0 = aLo * bLo;
+        var p1 = aHi * bLo;
+        var p2 = aLo * bHi;
+        var p3 = aHi * bHi;
 
-        var mid = lh + hl;
-        var midCarry = mid < lh ? 1u : 0u;
+        var mid = p1 + p2;
+        var carryMid = mid < p1 ? 1u : 0u;
 
-        var t0 = ll + (mid << 16);
-        var c0 = t0 < ll ? 1u : 0u;
+        // distribute the middle
+        var midLo = mid << 16;
+        var midHi = (mid >> 16) + (carryMid << 16);
 
-        var t1 = t0 + acc;
-        var c1 = t1 < t0 ? 1u : 0u;
+        var s0 = p0 + midLo;
+        var c0 = s0 < p0 ? 1u : 0u;
 
-        var t2 = t1 + carryIn;
-        var c2 = t2 < t1 ? 1u : 0u;
+        var hi = p3 + midHi + c0;
 
-        lo = t2;
+        var s1 = s0 + acc;
+        var c1 = s1 < s0 ? 1u : 0u;
 
-        return hh + (mid >> 16) + midCarry + c0 + c1 + c2;
+        var s2 = s1 + carryIn;
+        var c2 = s2 < s1 ? 1u : 0u;
+
+        hi = hi + c1 + c2;
+        lo = s2;
+
+        return hi;
     }
 }
