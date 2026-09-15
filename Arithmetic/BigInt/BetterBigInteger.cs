@@ -139,7 +139,7 @@ public sealed class BetterBigInteger : IBigInteger
         var digits = GetDigits();
         if (digits is [0]) return 0;
 
-        return 32 * digits.Length - BitOperations.LeadingZeroCount(digits[^1]);
+        return sizeof(int) * digits.Length - BitOperations.LeadingZeroCount(digits[^1]);
     }
 
     private static (BetterBigInteger quotient, BetterBigInteger remainder) DivRem(BetterBigInteger a,
@@ -292,8 +292,8 @@ public sealed class BetterBigInteger : IBigInteger
 
 
         var digits = a.GetDigits();
-        int limbShift = shift / 32;
-        int bitShift = shift % 32;
+        int limbShift = shift / sizeof(int);
+        int bitShift = shift % sizeof(int);
         var result = new uint[digits.Length + limbShift + 1];
 
         for (int i = 0; i < digits.Length; i++)
@@ -302,7 +302,7 @@ public sealed class BetterBigInteger : IBigInteger
 
             // carry of shifted bits
             if (bitShift > 0)
-                result[i + limbShift + 1] |= digits[i] >> (32 - bitShift);
+                result[i + limbShift + 1] |= digits[i] >> (sizeof(int) - bitShift);
         }
 
         return new BetterBigInteger(result, a.IsNegative);
@@ -322,8 +322,8 @@ public sealed class BetterBigInteger : IBigInteger
         }
 
         var digits = a.GetDigits();
-        int limbShift = shift / 32;
-        int bitShift = shift % 32;
+        int limbShift = shift / sizeof(int);
+        int bitShift = shift % sizeof(int);
         var result = new uint[digits.Length];
 
         for (int i = digits.Length - 1; i - limbShift >= 0; i--)
@@ -331,7 +331,7 @@ public sealed class BetterBigInteger : IBigInteger
             result[i - limbShift] |= digits[i] >> bitShift;
 
             if (bitShift > 0 && i - limbShift - 1 >= 0)
-                result[i - limbShift - 1] |= digits[i] << (32 - bitShift);
+                result[i - limbShift - 1] |= digits[i] << (sizeof(int) - bitShift);
         }
 
         return new BetterBigInteger(result, a.IsNegative);

@@ -1,5 +1,4 @@
-﻿using System;
-using Arithmetic.BigInt.Interfaces;
+﻿using Arithmetic.BigInt.Interfaces;
 
 namespace Arithmetic.BigInt.MultiplyStrategy;
 
@@ -32,7 +31,7 @@ internal class SimpleMultiplier : IMultiplier
             result[i + bDigs.Length] = carry;
         }
 
-        bool isNeg = a.IsNegative ^ b.IsNegative;
+        var isNeg = a.IsNegative ^ b.IsNegative;
         return new BetterBigInteger(result, isNeg);
     }
 
@@ -51,24 +50,44 @@ internal class SimpleMultiplier : IMultiplier
         var mid = p1 + p2;
         var carryMid = mid < p1 ? 1u : 0u;
 
-        // distribute the middle
         var midLo = mid << 16;
-        var midHi = (mid >> 16) + (carryMid << 16);
+        var midHi = (mid >> 16) | (carryMid << 16);
 
+        // lo part
         var s0 = p0 + midLo;
         var c0 = s0 < p0 ? 1u : 0u;
 
-        var hi = p3 + midHi + c0;
+        // hi part — каждое сложение отдельно с carry
+        var hi = p3;
 
+        var t0 = hi + midHi;
+        var ct0 = t0 < hi ? 1u : 0u;
+        hi = t0;
+
+        var t1 = hi + c0;
+        var ct1 = t1 < hi ? 1u : 0u;
+        hi = t1;
+
+        // добавляем acc и carryIn в lo, пробрасываем carries в hi
         var s1 = s0 + acc;
         var c1 = s1 < s0 ? 1u : 0u;
 
         var s2 = s1 + carryIn;
         var c2 = s2 < s1 ? 1u : 0u;
 
-        hi = hi + c1 + c2;
-        lo = s2;
+        var t2 = hi + c1;
+        var ct2 = t2 < hi ? 1u : 0u;
+        hi = t2;
 
+        var t3 = hi + c2;
+        var ct3 = t3 < hi ? 1u : 0u;
+        hi = t3;
+
+        // carries из hi не могут переполнить второй uint —
+        // максимальное hi = 0xFFFFFFFF, ct* суммарно ≤ 4, overflow невозможен
+        hi = hi + ct0 + ct1 + ct2 + ct3;
+
+        lo = s2;
         return hi;
     }
 }
